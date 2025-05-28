@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "*.def": "xml",
+        "unordered_set": "cpp",
+        "tuple": "cpp",
+        "utility": "cpp",
+        "xutility": "cpp",
+        "set": "cpp",
+        "unordered_map": "cpp"
+    }
+}
