@@ -1,5 +1,8 @@
 #pragma once
+#include <algorithm>
 #include <functional>
+#include <iostream>
+#include <memory>
 #include <stack>
 #include <string>
 #include <unordered_map>
@@ -7,8 +10,6 @@
 #include <vector>
 
 #include "DlxCell.h"
-#include <memory>
-#include <algorithm>
 
 // 辅助函数，用于组合哈希值 (类似于 Boost 的 hash_combine)
 template <class T>
@@ -69,11 +70,13 @@ class Solver {
     Solver(Solver&&) = delete;
     Solver& operator=(Solver&&) = delete;
 
-    std::vector<ActionID> Solve(OnSolutionfound foundCallback);
+    bool Solve(OnSolutionfound foundCallback);
 
     const std::vector<ActionID>& GetSolution() const { return m_solution; }
     size_t GetSolutionCount() const { return m_solutionCount; }
     bool IsSolutionValid() const { return m_isSolutionValid; }
+
+    void DumpMatrix();
 
    protected:
     void selectRow(DlxCell* row);
@@ -90,7 +93,7 @@ class Solver {
     }
 
     static bool defaultSortRequirement(const DlxCell* a, const DlxCell* b) {
-        return a->getColHeader()->getSize() < b->getColHeader()->getSize();
+        return a->getSize() < b->getSize();
     }
 
    protected:
@@ -124,7 +127,7 @@ inline Solver<R>::Solver(
 
     for (int i = 0; i < m_requirements.size(); ++i) {
         auto& req = m_requirements[i];
-        auto colHeader =new DlxCell(std::to_string(i));
+        auto colHeader = new DlxCell(std::to_string(i));
         m_colHeaders.emplace_back(colHeader);
         m_req2colHeader[req] = colHeader;
         m_matrixRoot->attach_horizontal(colHeader);
@@ -157,7 +160,7 @@ Solver<R>::~Solver() {
     std::vector<DlxCell*> toDelete;
     toDelete.push_back(m_matrixRoot);
     DlxCell* node = m_matrixRoot->getNextX();
-    while (node != m_matrixRoot) {
+    while (node && node != m_matrixRoot) {
         toDelete.push_back(node);
         DlxCell* verticalNode = node->getNextY();
         while (verticalNode != node) {
@@ -167,6 +170,10 @@ Solver<R>::~Solver() {
         node = node->getNextX();
     }
 
+    for (auto [actionId, rowHeader] : m_rowHeaders) {
+        toDelete.push_back(rowHeader);
+    }
+
     for (auto cell : toDelete) {
         delete cell;
     }
@@ -174,18 +181,19 @@ Solver<R>::~Solver() {
 }
 
 template <typename R>
-std::vector<ActionID> Solver<R>::Solve(OnSolutionfound foundCallback) {
+bool Solver<R>::Solve(OnSolutionfound foundCallback) {
     if (m_matrixRoot == nullptr || m_colHeaders.empty() ||
         m_rowHeaders.empty()) {
-        return {};
+        return false;
     }
 
     auto bestColumn = m_matrixRoot;
     auto node = m_matrixRoot->getNextX();
-    while (node != m_matrixRoot) {
+    while (node && node != m_matrixRoot) {
         auto index = std::stoll(node->getTitle());
         if (index < m_nonOptionalRequirementCount) {
-            if (defaultSortRequirement(node, bestColumn)) {
+            if (bestColumn == m_matrixRoot ||
+                defaultSortRequirement(node, bestColumn)) {
                 bestColumn = node;
             }
             node = node->getNextX();
@@ -194,6 +202,8 @@ std::vector<ActionID> Solver<R>::Solve(OnSolutionfound foundCallback) {
         }
     }
 
+    std::cerr << "best Column:" << bestColumn->getTitle() << std::endl;
+
     if (bestColumn == m_matrixRoot) {
         processSolution();
         if (m_isSolutionValid) {
@@ -201,11 +211,12 @@ std::vector<ActionID> Solver<R>::Solve(OnSolutionfound foundCallback) {
             if (foundCallback) {
                 foundCallback(m_solution);
             }
+            return true;
         }
     } else {
         std::vector<DlxCell*> actions;
         node = bestColumn->getNextY();
-        while (node != bestColumn) {
+        while (node && node != bestColumn) {
             actions.push_back(node);
             node = node->getNextY();
         }
@@ -213,15 +224,33 @@ std::vector<ActionID> Solver<R>::Solve(OnSolutionfound foundCallback) {
 
         std::sort(actions.begin(), actions.end(), defaultSortAction);
         for (auto& action : actions) {
+            std::cerr << "try action:" << action->getRowHeader()->getTitle()
+                      << std::endl;
             selectRow(action);
             if (m_isSolutionValid) {
                 this->Solve(foundCallback);
             }
+            std::cerr << "undo action:" << action->getRowHeader()->getTitle()
+                      << std::endl;
             unselectRow(action);
             m_isSolutionValid = true;  // Reset validity for the next iteration
         }
 
         m_history.pop();
+    }
+
+    return false;
+}
+
+template <typename R>
+inline void Solver<R>::DumpMatrix() {
+
+    for (auto [id, header] : m_rowHeaders) {
+        std::cerr << id << "\t";
+        for (auto col = header->getNextX(); col != header; col = col->getNextX()) {
+            std::cerr << col->getColHeader()->getTitle() << ":" << 1 << "\t";
+        }
+        std::cerr << std::endl;
     }
 }
 
@@ -233,7 +262,7 @@ void Solver<R>::selectRow(DlxCell* row) {
 
     row->select();
     m_solution.push_back(row->getRowHeader()->getTitle());
-    this->processRowSelection(row->getRowHeader());
+    this->processRowSelection(row);
 }
 
 template <typename R>
@@ -244,7 +273,7 @@ void Solver<R>::unselectRow(DlxCell* row) {
 
     row->unselect();
     m_solution.pop_back();
-    this->processRowUnselection(row->getRowHeader());
+    this->processRowUnselection(row);
 }
 
 template <typename R>

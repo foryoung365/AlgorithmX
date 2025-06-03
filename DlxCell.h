@@ -74,10 +74,8 @@ namespace AlgorithmX
      
          void remove_column()
          {
-             if (this != col_header) {
-                 return;
-             }
-     
+
+             this->remove_x();
              DlxCell* node = next_y;
              while (node != this)
              {
@@ -88,9 +86,6 @@ namespace AlgorithmX
      
          void restore_column()
          {
-             if (this != col_header) {
-                 return;
-             }
      
              DlxCell* node = prev_y;
              while (node != this)
@@ -138,20 +133,22 @@ namespace AlgorithmX
          void unselect()
          {
              DlxCell* node = this->prev_x;
-             do
+             while (node != this)
              {
                  node->col_header->restore_column();
                  node->restore_y();
                  node = node->prev_x;
                  /* code */
-             } while(node != this);
+             }
+             node->col_header->restore_column();
+             node->restore_y();
          }
      
         private:
-         DlxCell* prev_x = nullptr;
-         DlxCell* next_x = nullptr;
-         DlxCell* prev_y = nullptr;
-         DlxCell* next_y = nullptr;
+         DlxCell* prev_x = this;
+         DlxCell* next_x = this;
+         DlxCell* prev_y = this;
+         DlxCell* next_y = this;
      
          DlxCell* col_header = nullptr;
          DlxCell* row_header = nullptr;
