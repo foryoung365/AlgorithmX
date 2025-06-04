@@ -1,80 +1,14 @@
-#include "Solver.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <iterator>
 
+#include "Solver.h"
+#include "Utilities.h"
+
 
 using namespace AlgorithmX;
 using namespace std;
-
-// 辅助函数，用于打印单个元素（可以根据需要特化）
-template <typename T>
-void print_element(const T &element) {
-    std::cerr << element;
-}
-
-// 特化版本，用于打印字符串时加上引号
-template <>
-void print_element<std::string>(const std::string &element) {
-    std::cerr << '"' << element << '"';
-}
-
-// 递归打印容器元素的辅助函数 (可选，用于元组中包含容器的情况)
-template <typename T>
-void print_container(const T &container) {
-    std::cout << "{";
-    bool first = true;
-    for (const auto &item : container) {
-        if (!first) {
-            std::cout << ", ";
-        }
-        print_element(item);  // 递归调用，以处理容器内元素
-        first = false;
-    }
-    std::cerr << "}";
-}
-
-// 主要的打印元组函数
-template <typename... Args>
-void print_tuple(const std::tuple<Args...> &t) {
-    std::cerr << "(";
-    bool first = true;
-    std::apply(
-        [&first](const auto &...args) {
-            // 使用折叠表达式遍历元组元素
-            auto print_with_comma = [&](const auto &arg) {
-                if (!first) {
-                    std::cerr << ", ";
-                }
-                print_element(arg);  // 使用辅助函数打印元素
-                first = false;
-            };
-            (print_with_comma(args), ...);  // C++17 折叠表达式
-        },
-        t);
-    std::cerr << ")" << std::endl;
-}
-
-void print_centered(const std::string &str, int total_width, bool bNoTail = false,
-                    char fill_char = ' ') {
-    int len = str.length();
-    if (len >= total_width) {
-        std::cout << str;  // 如果字符串长度超过或等于总宽度，直接输出
-    } else {
-        int padding_total = total_width - len;
-        int padding_left = padding_total / 2;
-        int padding_right = padding_total - padding_left;  // 处理奇数长度的填充
-
-        std::cout << std::setfill(fill_char);
-        std::cout << std::setw(padding_left) << "" << str;
-        if (!bNoTail) {
-            std::cout << std::setw(padding_right) << "";
-        }
-        
-        std::cout << std::setfill(' ');  // 恢复默认填充字符为空格
-    }
-}
 
 
 int main(){
