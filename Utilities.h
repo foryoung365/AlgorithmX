@@ -2,7 +2,7 @@
 
 // 辅助函数，用于组合哈希值 (类似于 Boost 的 hash_combine)
 template <class T>
-inline void hash_combine(std::size_t& seed, const T& v) {
+inline void hash_combine(std::size_t &seed, const T &v) {
     std::hash<T> hasher;
     seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
@@ -10,7 +10,7 @@ inline void hash_combine(std::size_t& seed, const T& v) {
 // 递归模板，用于计算元组中每个元素的哈希值并组合
 template <class Tuple, std::size_t Index = std::tuple_size<Tuple>::value - 1>
 struct TupleHasher {
-    static void hash_value(std::size_t& seed, const Tuple& tuple) {
+    static void hash_value(std::size_t &seed, const Tuple &tuple) {
         TupleHasher<Tuple, Index - 1>::hash_value(seed, tuple);
         hash_combine(seed, std::get<Index>(tuple));
     }
@@ -19,7 +19,7 @@ struct TupleHasher {
 // 递归基本情况：当索引为0时
 template <class Tuple>
 struct TupleHasher<Tuple, 0> {
-    static void hash_value(std::size_t& seed, const Tuple& tuple) {
+    static void hash_value(std::size_t &seed, const Tuple &tuple) {
         hash_combine(seed, std::get<0>(tuple));
     }
 };
@@ -28,7 +28,7 @@ struct TupleHasher<Tuple, 0> {
 namespace std {
 template <typename... Ts>
 struct hash<std::tuple<Ts...>> {
-    std::size_t operator()(const std::tuple<Ts...>& t) const {
+    std::size_t operator()(const std::tuple<Ts...> &t) const {
         std::size_t seed = 0;
         // 处理空元组的情况
         if constexpr (sizeof...(Ts) > 0) {

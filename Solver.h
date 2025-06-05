@@ -50,17 +50,18 @@ class Solver {
     virtual void processRowUnselection(DlxCell* row);
     virtual void processSolution();
 
-    static bool defaultSortAction(const DlxCell* a, const DlxCell* b) {
+    static bool DefaultSortAction(const DlxCell* a, const DlxCell* b) {
         return false;
     }
 
-    static bool defaultSortRequirement(const DlxCell* a, const DlxCell* b) {
+    static bool DefaultSortRequirement(const DlxCell* a, const DlxCell* b) {
         return a->getSize() < b->getSize();
     }
 
+    DlxCell* AllocCell() { return &m_pAllocatedCells[m_nIdxAllocated++]; }
+
    protected:
     std::vector<R> m_requirements;
-    std::unordered_map<ActionID, std::vector<R>> m_actions;
     std::unordered_set<R> m_optionRequirements;
     std::vector<ActionID> m_solution;
     size_t m_solutionCount = 0;
@@ -71,6 +72,8 @@ class Solver {
     std::unordered_map<ActionID, DlxCell*> m_rowHeaders;
     std::unordered_map<R, DlxCell*> m_req2colHeader;
     size_t m_nonOptionalRequirementCount = 0;
+    DlxCell* m_pAllocatedCells = nullptr;
+    size_t m_nIdxAllocated = 0;
 };
 
 template <typename R>
@@ -80,28 +83,42 @@ inline Solver<R>::Solver(
     const std::unordered_set<R>& optionRequirements) {
     m_requirements = requirements;
     m_nonOptionalRequirementCount = requirements.size();
-    m_actions = actions;
     m_optionRequirements = optionRequirements;
     m_requirements.insert(m_requirements.end(), optionRequirements.begin(),
                           optionRequirements.end());
-    m_matrixRoot = new DlxCell("Root");
+
+    // calculate cell total number
+    int nTotal = 0;
+    for (const auto& [k, v] : actions) {
+        nTotal += v.size();
+    }
+    nTotal += actions.size();
+    nTotal += m_requirements.size();
+    nTotal += 1;  // for root
+
+    m_pAllocatedCells = new DlxCell[nTotal];
+
+    m_matrixRoot = AllocCell();
+    m_matrixRoot->setTitle("Root");
     m_matrixRoot->setSize(INT32_MAX);
 
     for (int i = 0; i < m_requirements.size(); ++i) {
         auto& req = m_requirements[i];
-        auto colHeader = new DlxCell(std::to_string(i));
+        auto colHeader = AllocCell();
+        colHeader->setId(i);
         m_colHeaders.emplace_back(colHeader);
         m_req2colHeader[req] = colHeader;
         m_matrixRoot->attach_horizontal(colHeader);
     }
 
-    for (const auto& [actionID, reqByAction] : m_actions) {
-        auto rowHeader = new DlxCell(actionID);
+    for (const auto& [actionID, reqByAction] : actions) {
+        auto rowHeader = AllocCell();
+        rowHeader->setTitle(actionID);
         m_rowHeaders[actionID] = rowHeader;
 
         DlxCell* prev = nullptr;
         for (const auto& req : reqByAction) {
-            auto next = new DlxCell();
+            auto next = AllocCell();
             next->setColHeader(m_req2colHeader[req]);
             next->setRowHeader(rowHeader);
             next->getColHeader()->setSize(next->getColHeader()->getSize() + 1);
@@ -119,27 +136,9 @@ inline Solver<R>::Solver(
 
 template <typename R>
 Solver<R>::~Solver() {
-    std::vector<DlxCell*> toDelete;
-    toDelete.push_back(m_matrixRoot);
-    DlxCell* node = m_matrixRoot->getNextX();
-    while (node && node != m_matrixRoot) {
-        toDelete.push_back(node);
-        DlxCell* verticalNode = node->getNextY();
-        while (verticalNode != node) {
-            toDelete.push_back(verticalNode);
-            verticalNode = verticalNode->getNextY();
-        }
-        node = node->getNextX();
+    if (m_pAllocatedCells) {
+        delete[] m_pAllocatedCells;
     }
-
-    for (auto [actionId, rowHeader] : m_rowHeaders) {
-        toDelete.push_back(rowHeader);
-    }
-
-    for (auto cell : toDelete) {
-        delete cell;
-    }
-    toDelete.clear();
 }
 
 template <typename R>
@@ -152,10 +151,10 @@ bool Solver<R>::Solve(OnSolutionfound foundCallback) {
     auto bestColumn = m_matrixRoot;
     auto node = m_matrixRoot->getNextX();
     while (node && node != m_matrixRoot) {
-        auto index = std::stoll(node->getTitle());
+        auto index = node->getId();
         if (index < m_nonOptionalRequirementCount) {
             if (bestColumn == m_matrixRoot ||
-                defaultSortRequirement(node, bestColumn)) {
+                DefaultSortRequirement(node, bestColumn)) {
                 bestColumn = node;
             }
             node = node->getNextX();
@@ -164,7 +163,7 @@ bool Solver<R>::Solve(OnSolutionfound foundCallback) {
         }
     }
 
-    std::cerr << "best Column:" << bestColumn->getTitle() << std::endl;
+    // std::cerr << "best Column:" << bestColumn->getTitle() << std::endl;
 
     if (bestColumn == m_matrixRoot) {
         processSolution();
@@ -184,16 +183,16 @@ bool Solver<R>::Solve(OnSolutionfound foundCallback) {
         }
         m_history.push(m_history.top());
 
-        std::sort(actions.begin(), actions.end(), defaultSortAction);
+        std::sort(actions.begin(), actions.end(), DefaultSortAction);
         for (auto& action : actions) {
-            std::cerr << "try action:" << action->getRowHeader()->getTitle()
-                      << std::endl;
+            /*std::cerr << "try action:" << action->getRowHeader()->getTitle()
+                      << std::endl;*/
             selectRow(action);
             if (m_isSolutionValid) {
                 this->Solve(foundCallback);
             }
-            std::cerr << "undo action:" << action->getRowHeader()->getTitle()
-                      << std::endl;
+            /*std::cerr << "undo action:" << action->getRowHeader()->getTitle()
+                      << std::endl;*/
             unselectRow(action);
             m_isSolutionValid = true;  // Reset validity for the next iteration
         }
@@ -206,10 +205,10 @@ bool Solver<R>::Solve(OnSolutionfound foundCallback) {
 
 template <typename R>
 inline void Solver<R>::DumpMatrix() {
-
     for (auto [id, header] : m_rowHeaders) {
         std::cerr << id << "\t";
-        for (auto col = header->getNextX(); col != header; col = col->getNextX()) {
+        for (auto col = header->getNextX(); col != header;
+             col = col->getNextX()) {
             std::cerr << col->getColHeader()->getTitle() << ":" << 1 << "\t";
         }
         std::cerr << std::endl;
