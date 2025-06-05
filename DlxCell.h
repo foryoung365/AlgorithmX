@@ -2,10 +2,10 @@
 #include <string>
 
 namespace AlgorithmX {
+template <typename T>
 class DlxCell {
    public:
-    DlxCell(std::string title = "") : title(title) {}
-    DlxCell(int id) : id(id) {}
+    DlxCell() {}
     ~DlxCell() = default;
     DlxCell(const DlxCell&) = default;
     DlxCell& operator=(const DlxCell&) = default;
@@ -20,8 +20,8 @@ class DlxCell {
     void setColHeader(DlxCell* header) { col_header = header; }
     void setRowHeader(DlxCell* header) { row_header = header; }
     DlxCell* getRowHeader() const { return row_header; }
-    const std::string& getTitle() const { return title; }
-    void setTitle(std::string newTitle) { title = newTitle; }
+    const T& getValue() const { return value; }
+    void setValue(const T& newValue) { value = newValue; }
     const int getId() const { return id; }
     void setId(int newId) { id = newId; }
     size_t getSize() const { return size; }
@@ -136,7 +136,7 @@ class DlxCell {
     DlxCell* col_header = nullptr;
     DlxCell* row_header = nullptr;
 
-    std::string title;
+    T value;
 
     size_t size = 0;
     int id = 0;
