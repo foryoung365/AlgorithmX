@@ -24,7 +24,7 @@ class Solver {
    public:
     Solver(const std::vector<R>& requirements,
            const std::unordered_map<ActionID, std::vector<R>>& actions,
-           const std::unordered_set<R>& optionRequirements);
+           const std::vector<R>& optionRequirements);
     virtual ~Solver();
 
     Solver(const Solver&) = delete;
@@ -62,7 +62,7 @@ class Solver {
 
    protected:
     std::vector<R> m_requirements;
-    std::unordered_set<R> m_optionRequirements;
+    std::vector<R> m_optionRequirements;
     std::vector<ActionID> m_solution;
     size_t m_solutionCount = 0;
     std::stack<std::unordered_set<ActionID>> m_history;
@@ -80,7 +80,7 @@ template <typename R>
 inline Solver<R>::Solver(
     const std::vector<R>& requirements,
     const std::unordered_map<ActionID, std::vector<R>>& actions,
-    const std::unordered_set<R>& optionRequirements) {
+    const std::vector<R>& optionRequirements) {
     m_requirements = requirements;
     m_nonOptionalRequirementCount = requirements.size();
     m_optionRequirements = optionRequirements;
@@ -183,7 +183,7 @@ bool Solver<R>::Solve(OnSolutionfound foundCallback) {
         }
         m_history.push(m_history.top());
 
-        std::sort(actions.begin(), actions.end(), DefaultSortAction);
+        //std::sort(actions.begin(), actions.end(), DefaultSortAction);
         for (auto& action : actions) {
             /*std::cerr << "try action:" << action->getRowHeader()->getTitle()
                       << std::endl;*/
