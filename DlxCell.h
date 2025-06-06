@@ -4,7 +4,7 @@
 namespace AlgorithmX {
 template <typename T>
 class DlxCell {
-   public:
+public:
     DlxCell() {}
     ~DlxCell() = default;
     DlxCell(const DlxCell&) = default;
@@ -127,7 +127,7 @@ class DlxCell {
         node->restore_y();
     }
 
-   private:
+private:
     DlxCell* prev_x = this;
     DlxCell* next_x = this;
     DlxCell* prev_y = this;

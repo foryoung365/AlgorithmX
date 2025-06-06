@@ -14,20 +14,15 @@
 
 namespace AlgorithmX {
 
-
-
-
-
 template <typename R>
 class Solver {
-   public:
+public:
     using ActionID = R;
     using OnSolutionfound = std::function<void(const std::vector<ActionID>&)>;
-    using SortAction = std::function<bool(const DlxCell<R>*, const DlxCell<R>*)>;
-    using SortRequirement = std::function<bool(const DlxCell<R>*, const DlxCell<R>*)>;
     Solver(const std::vector<R>& requirements,
            const std::unordered_map<ActionID, std::vector<R>>& actions,
-           const std::vector<R>& optionRequirements);
+           const std::vector<R>& optionRequirements,
+           bool bOnlyFoundOneSolution = false);
     virtual ~Solver();
 
     Solver(const Solver&) = delete;
@@ -35,7 +30,7 @@ class Solver {
     Solver(Solver&&) = delete;
     Solver& operator=(Solver&&) = delete;
 
-    bool Solve(OnSolutionfound foundCallback);
+    void Solve(OnSolutionfound foundCallback);
 
     const std::vector<ActionID>& GetSolution() const { return m_solution; }
     size_t GetSolutionCount() const { return m_solutionCount; }
@@ -43,27 +38,33 @@ class Solver {
 
     void DumpMatrix();
 
-   protected:
+protected:
     void selectRow(DlxCell<R>* row);
     void unselectRow(DlxCell<R>* row);
 
+    static bool DefaultSortRequirement(Solver<R>* solver, const DlxCell<R>* a,
+                                       const DlxCell<R>* b) {
+        return solver->SortRequirement(a, b);
+    }
+
+    DlxCell<R>* AllocCell() { return &m_pAllocatedCells[m_nIdxAllocated++]; }
+
+protected:
     virtual void remember(ActionID item);
 
     virtual void processRowSelection(DlxCell<R>* row);
     virtual void processRowUnselection(DlxCell<R>* row);
     virtual void processSolution();
 
-    static bool DefaultSortAction(const DlxCell<R>* a, const DlxCell<R>* b) {
+    virtual bool SortAction(const DlxCell<R>* a, const DlxCell<R>* b) {
         return false;
     }
 
-    static bool DefaultSortRequirement(const DlxCell<R>* a, const DlxCell<R>* b) {
+    virtual bool SortRequirement(const DlxCell<R>* a, const DlxCell<R>* b) {
         return a->getSize() < b->getSize();
     }
 
-    DlxCell<R>* AllocCell() { return &m_pAllocatedCells[m_nIdxAllocated++]; }
-
-   protected:
+protected:
     std::vector<R> m_requirements;
     std::vector<R> m_optionRequirements;
     std::vector<ActionID> m_solution;
@@ -77,18 +78,20 @@ class Solver {
     size_t m_nonOptionalRequirementCount = 0;
     DlxCell<R>* m_pAllocatedCells = nullptr;
     size_t m_nIdxAllocated = 0;
+    bool m_bOnlyOne = false;
 };
 
 template <typename R>
 inline Solver<R>::Solver(
     const std::vector<R>& requirements,
     const std::unordered_map<ActionID, std::vector<R>>& actions,
-    const std::vector<R>& optionRequirements) {
+    const std::vector<R>& optionRequirements, bool bOnlyFoundOneSolution) {
     m_requirements = requirements;
     m_nonOptionalRequirementCount = requirements.size();
     m_optionRequirements = optionRequirements;
     m_requirements.insert(m_requirements.end(), optionRequirements.begin(),
                           optionRequirements.end());
+    m_bOnlyOne = bOnlyFoundOneSolution;
 
     // calculate cell total number
     int nTotal = 0;
@@ -145,28 +148,33 @@ Solver<R>::~Solver() {
 }
 
 template <typename R>
-bool Solver<R>::Solve(OnSolutionfound foundCallback) {
+void Solver<R>::Solve(OnSolutionfound foundCallback) {
     if (m_matrixRoot == nullptr || m_colHeaders.empty() ||
         m_rowHeaders.empty()) {
-        return false;
+        return;
     }
 
     auto bestColumn = m_matrixRoot;
     auto node = m_matrixRoot->getNextX();
     while (node && node != m_matrixRoot) {
+        if (node->getSize() == 0) {
+            return;
+        }
+
         auto index = node->getId();
         if (index < m_nonOptionalRequirementCount) {
             if (bestColumn == m_matrixRoot ||
-                DefaultSortRequirement(node, bestColumn)) {
+                DefaultSortRequirement(this, node, bestColumn)) {
                 bestColumn = node;
+                if (bestColumn->getSize() == 1) {
+                    break;
+                }
             }
             node = node->getNextX();
         } else {
             node = m_matrixRoot;
         }
     }
-
-    // std::cerr << "best Column:" << bestColumn->getValue() << std::endl;
 
     if (bestColumn == m_matrixRoot) {
         processSolution();
@@ -175,7 +183,7 @@ bool Solver<R>::Solve(OnSolutionfound foundCallback) {
             if (foundCallback) {
                 foundCallback(m_solution);
             }
-            return true;
+            return;
         }
     } else {
         std::vector<DlxCell<R>*> actions;
@@ -186,35 +194,23 @@ bool Solver<R>::Solve(OnSolutionfound foundCallback) {
         }
         m_history.push(m_history.top());
 
-        //std::sort(actions.begin(), actions.end(), DefaultSortAction);
         for (auto& action : actions) {
-            /*std::cerr << "try action:" << action->getRowHeader()->getValue()
-                      << std::endl;*/
             selectRow(action);
-            if (m_isSolutionValid) {
+            if (m_isSolutionValid && (!m_bOnlyOne || m_solutionCount == 0)) {
                 this->Solve(foundCallback);
             }
-            /*std::cerr << "undo action:" << action->getRowHeader()->getValue()
-                      << std::endl;*/
             unselectRow(action);
             m_isSolutionValid = true;  // Reset validity for the next iteration
         }
 
         m_history.pop();
     }
-
-    return false;
 }
 
 template <typename R>
 inline void Solver<R>::DumpMatrix() {
-    for (auto [id, header] : m_rowHeaders) {
-        std::cerr << id << "\t";
-        for (auto col = header->getNextX(); col != header;
-             col = col->getNextX()) {
-            std::cerr << col->getColHeader()->getTitle() << ":" << 1 << "\t";
-        }
-        std::cerr << std::endl;
+    for (auto node = m_matrixRoot->getNextX(); node != m_matrixRoot; node = node->getNextX()) {
+        std::cout << node->getId() << ":" << node->getSize() << std::endl;
     }
 }
 
